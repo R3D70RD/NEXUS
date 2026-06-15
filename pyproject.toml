@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai_infrastructure"
+version = "0.1.0"
+description = "NEXUS - Neural Executive Utility System"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+]
+
+[project.optional-dependencies]
+voice = [
+    "piper-tts",
+    "sounddevice",
+]
+
+[project.scripts]
+nexus = "ai_infrastructure.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

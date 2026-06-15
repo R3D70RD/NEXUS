@@ -205,3 +205,10 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+nexus/bin/python3.12
+nexus/bin/python3
+nexus/bin/python
+nexus/lib64
+nexus/pyvenv.cfg
+src/nexus/data/
+src/nexus/data/voices/

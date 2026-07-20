@@ -5,8 +5,9 @@ The orchestrator: boot sequence, logic gate, agentic loop.
 
 from components.boot_manager import BootTracker
 from components import session_memory
-from components import voice
+from components import tts
 from components import llm_provider
+from components import vtt
 
 MODEL = "ministral-3"
 
@@ -22,15 +23,12 @@ Core Identity:
 
 Behavior Rules:
 - Give concise and useful answers.
-- Stay clear and structured.
+- Stay clear.
 - Avoid unnecessary filler.
 - Be practical and solution-oriented.
 - Adapt to the ongoing conversation context.
 - Remember recent conversation history provided to you.
 - If information is missing, ask focused questions.
-- Prioritize accuracy and reasoning.
-- Do not use bold text in answers.
-- Do not answer like a robot.
 
 System State:
 - Running locally through Ollama
@@ -45,6 +43,7 @@ Limitations:
 - Memory only lasts during the current session
 
 You are NEXUS.
+Speak ENGLISH by default
 """
 
 
@@ -71,26 +70,28 @@ NEXUS:"""
 def nexus_loop():
     """Main terminal REPL."""
     print("--- NEXUS v0.1 Operational ---")
-    print("Type 'exit' or 'quit' to shut down.\n")
+    print("Type or say 'exit' or 'quit' to shut down.\n")
 
     session_memory.load()
 
     while True:
         try:
-            user_input = input("You: ").strip()
+            # user_input = input("You: ").strip()
+            user_input = vtt.listen()
+            print(user_input)
 
             if not user_input:
                 continue
 
-            if user_input.lower() in ["exit", "quit"]:
+            if user_input.lower() in ["exit.", "quit."]:
                 print("NEXUS: Shutting down.")
                 session_memory.save()
                 break
 
             message = nexus_run(user_input)
             print(f"NEXUS: {message}")
-            clean = voice.clean_for_tts(message)
-            voice.speak(clean)
+            clean = tts.clean_for_tts(message)
+            tts.speak(clean)
 
         except (KeyboardInterrupt, EOFError):
             print("\nNEXUS: Shutting down.")

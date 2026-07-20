@@ -39,42 +39,63 @@ def _load_voice():
         return None
 
 
+import re
+
 def clean_for_tts(text: str) -> str:
-    """Strip markdown/code formatting so TTS doesn't read out symbols."""
+    """Strip ANSI escape sequences, markdown, and special formatting for smooth TTS playback."""
     if not text:
         return ""
 
-    # Remove code blocks entirely
+    # 1. Remove ANSI escape codes (e.g., \u001b[10D, \u001b[K, \033[2J)
+    # This targets CSI sequences (Control Sequence Introducer) common in terminal outputs
+    ansi_escape = re.compile(r'(?:\x1b|\u001b)\[[0-9?]*[a-zA-Z]')
+    text = ansi_escape.sub('', text)
+
+    # 2. Remove specific terminal clearing/erase artifacts that might leave behind raw character fragments
+    text = re.sub(r'(?:\x1b|\u001b)[K]', '', text)
+
+    # 3. Handle specific text-based UI separators and structural symbols
+    text = re.sub(r'-{2,}', ' ', text)                  # Remove horizontal rules like "---"
+    text = re.sub(r'[\u2192\u25b6\u279c➔➔→]', ' to ', text) # Convert arrows (→) to the spoken word "to"
+    text = re.sub(r'[\u2014\u2013—–]', ', ', text)       # Convert em/en dashes to commas for a natural speaking pause
+
+    # 4. Remove code blocks entirely
     text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
 
-    # Bold / italics (** ** , * *, __ __ , _ _)
+    # 5. Bold / italics (** ** , * *, __ __ , _ _)
     text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
     text = re.sub(r'__(.*?)__', r'\1', text)
     text = re.sub(r'\*(.*?)\*', r'\1', text)
     text = re.sub(r'_(.*?)_', r'\1', text)
 
-    # Inline code
+    # 6. Inline code
     text = re.sub(r'`(.*?)`', r'\1', text)
 
-    # Markdown headers
+    # 7. Markdown headers
     text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
 
-    # Bullets
+    # 8. Bullets and List Numbers (e.g., "1. **Cognitive**" -> "1. Cognitive")
+    # Clean bullet characters
     text = re.sub(r'^\s*[-•*]\s*', '', text, flags=re.MULTILINE)
+    # Ensure numbered lists have a clean space after the digit so TTS handles it as a sentence pause
+    text = re.sub(r'^\s*(\d+)\.\s*', r'\1. ', text, flags=re.MULTILINE)
 
-    # Links: [label](url) -> label
+    # 9. Links: [label](url) -> label
     text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
 
-    # Strikethrough ~~text~~ -> text
+    # 10. Strikethrough ~~text~~ -> text
     text = re.sub(r'~~(.*?)~~', r'\1', text)
 
-    # Leftover stray markdown/formatting characters
+    # 11. Leftover stray markdown/formatting characters
     text = re.sub(r'[*_~`#>]', '', text)
 
-    # Collapse extra whitespace/newlines
+    # 12. Collapse extra whitespace/newlines into natural sentence pauses
     text = re.sub(r'\n{2,}', '. ', text)
     text = re.sub(r'\n', ' ', text)
     text = re.sub(r'[ \t]{2,}', ' ', text)
+
+    # Fix potential double periods caused by combining newlines and existing punctuation
+    text = re.sub(r'\.{2,}', '.', text)
 
     return text.strip()
 

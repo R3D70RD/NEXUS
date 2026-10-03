@@ -11,6 +11,9 @@ from nexus.config import get_settings
 _model = None
 _whisper_load_failed = False
 
+# Size of each recording chunk, in seconds. Smaller = more responsive VAD.
+_CHUNK_SECONDS = 0.25
+
 
 def _load_whisper():
     global _model, _whisper_load_failed
@@ -48,6 +51,46 @@ def wait_for_wake_word(wake_word: str):
             return text
 
 
+def _record_until_silence(sd, sample_rate: int, max_seconds: int,
+                          silence_seconds: float, rms_threshold: float):
+    """Record audio until the speaker pauses or `max_seconds` is reached.
+
+    Uses a simple RMS-based voice activity detector: recording stops once
+    speech has been detected and is followed by `silence_seconds` of quiet.
+    Returns a list of float32 numpy chunks.
+    """
+    import numpy as np
+
+    chunk_frames = int(_CHUNK_SECONDS * sample_rate)
+    max_chunks = max(1, int(max_seconds / _CHUNK_SECONDS))
+    silence_chunks_needed = max(1, int(silence_seconds / _CHUNK_SECONDS))
+
+    chunks = []
+    silent_run = 0
+    has_speech = False
+
+    for _ in range(max_chunks):
+        chunk = sd.rec(
+            chunk_frames,
+            samplerate=sample_rate,
+            channels=1,
+            dtype="float32",
+        )
+        sd.wait()
+        chunks.append(chunk)
+
+        rms = float(np.sqrt(np.mean(chunk ** 2)))
+        if rms < rms_threshold:
+            silent_run += 1
+            if has_speech and silent_run >= silence_chunks_needed:
+                break
+        else:
+            has_speech = True
+            silent_run = 0
+
+    return chunks
+
+
 def listen():
     model = _load_whisper()
     if model is None:
@@ -55,23 +98,27 @@ def listen():
         return None
 
     try:
+        import numpy as np
         import sounddevice as sd
         from scipy.io.wavfile import write
 
         settings = get_settings()
         sample_rate = settings.sample_rate
-        duration = settings.listen_duration_seconds
+        max_seconds = settings.listen_duration_seconds
+        silence_seconds = settings.silence_duration_seconds
+        rms_threshold = settings.silence_rms_threshold
         live_input_wav = str(settings.live_input_wav)
 
         print("\n NEXUS: Listening... ")
-        audio_data = sd.rec(
-            int(duration * sample_rate),
-            samplerate=sample_rate,
-            channels=1,
-            dtype="float32"
+        chunks = _record_until_silence(
+            sd, sample_rate, max_seconds, silence_seconds, rms_threshold
         )
-        sd.wait()
         print("Recording finished. Transcribing...")
+
+        if not chunks:
+            return None
+
+        audio_data = np.concatenate(chunks, axis=0)
 
         os.makedirs(os.path.dirname(live_input_wav), exist_ok=True)
 

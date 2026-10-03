@@ -16,12 +16,19 @@ _INT_FIELDS = {
     "llm_timeout_seconds",
 }
 
+_FLOAT_FIELDS = {
+    "silence_duration_seconds",
+    "silence_rms_threshold",
+}
+
 
 @dataclass
 class Settings:
     model: str = "ministral-3"
     whisper_model: str = "small"
-    listen_duration_seconds: int = 5
+    listen_duration_seconds: int = 15
+    silence_duration_seconds: float = 1.5
+    silence_rms_threshold: float = 0.01
     sample_rate: int = 16000
     max_history: int = 10
     voice_filename: str = "en_US-ljspeech-high.onnx"
@@ -86,6 +93,11 @@ def load_settings(path: Path | None = None, *, data_dir: Path | None = None) -> 
                 if key in _INT_FIELDS:
                     try:
                         value = int(value)
+                    except (TypeError, ValueError):
+                        continue
+                elif key in _FLOAT_FIELDS:
+                    try:
+                        value = float(value)
                     except (TypeError, ValueError):
                         continue
                 setattr(settings, key, value)

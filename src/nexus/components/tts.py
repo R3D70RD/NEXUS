@@ -8,15 +8,14 @@ headless / text-only.
 import os
 import re
 
-VOICE_MODEL_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "data",
-    "voices",
-    "en_US-ljspeech-high.onnx"
-)
+from nexus.config import get_settings
 
 _voice = None
 _voice_load_failed = False
+
+
+def _voice_model_path() -> str:
+    return str(get_settings().voice_model_path)
 
 
 def _load_voice():
@@ -28,11 +27,12 @@ def _load_voice():
     try:
         from piper import PiperVoice
 
-        if not os.path.exists(VOICE_MODEL_PATH):
+        path = _voice_model_path()
+        if not os.path.exists(path):
             _voice_load_failed = True
             return None
 
-        _voice = PiperVoice.load(VOICE_MODEL_PATH)
+        _voice = PiperVoice.load(path)
         return _voice
     except Exception:
         _voice_load_failed = True
@@ -40,41 +40,44 @@ def _load_voice():
 
 
 def clean_for_tts(text: str) -> str:
-    """Strip markdown/code formatting so TTS doesn't read out symbols."""
+    """Strip ANSI escape sequences, markdown, and special formatting for smooth TTS playback."""
     if not text:
         return ""
 
-    # Remove code blocks entirely
+    ansi_escape = re.compile(r'(?:\x1b|\u001b)\[[0-9?]*[a-zA-Z]')
+    text = ansi_escape.sub('', text)
+
+    text = re.sub(r'(?:\x1b|\u001b)[K]', '', text)
+
+    text = re.sub(r'-{2,}', ' ', text)
+    text = re.sub(r'[\u2192\u25b6\u279c➔➔→]', ' to ', text)
+    text = re.sub(r'[\u2014\u2013—–]', ', ', text)
+
     text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
 
-    # Bold / italics (** ** , * *, __ __ , _ _)
     text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
     text = re.sub(r'__(.*?)__', r'\1', text)
     text = re.sub(r'\*(.*?)\*', r'\1', text)
     text = re.sub(r'_(.*?)_', r'\1', text)
 
-    # Inline code
     text = re.sub(r'`(.*?)`', r'\1', text)
 
-    # Markdown headers
     text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
 
-    # Bullets
     text = re.sub(r'^\s*[-•*]\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*(\d+)\.\s*', r'\1. ', text, flags=re.MULTILINE)
 
-    # Links: [label](url) -> label
     text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
 
-    # Strikethrough ~~text~~ -> text
     text = re.sub(r'~~(.*?)~~', r'\1', text)
 
-    # Leftover stray markdown/formatting characters
     text = re.sub(r'[*_~`#>]', '', text)
 
-    # Collapse extra whitespace/newlines
     text = re.sub(r'\n{2,}', '. ', text)
     text = re.sub(r'\n', ' ', text)
     text = re.sub(r'[ \t]{2,}', ' ', text)
+
+    text = re.sub(r'\.{2,}', '.', text)
 
     return text.strip()
 
@@ -110,7 +113,6 @@ def speak(text: str):
         sd.play(audio, samplerate=22050)
         sd.wait()
     except Exception:
-        # Audio output failed (e.g. no audio device); fail silently.
         pass
 
 

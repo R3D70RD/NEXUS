@@ -3,18 +3,23 @@ Boot Manager
 Tracks boot count and first-run state via a JSON file.
 """
 
+from __future__ import annotations
+
 import json
 import os
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-BOOT_FILE = os.path.join(DATA_DIR, "boot_state.json")
+from nexus.config import get_settings
+
+
+def _default_boot_file() -> str:
+    return str(get_settings().boot_state_file)
 
 
 class BootTracker:
     """Tracks how many times NEXUS has booted, persisted to disk."""
 
-    def __init__(self, path: str = BOOT_FILE):
-        self.path = path
+    def __init__(self, path: str | None = None):
+        self.path = path or _default_boot_file()
         self._ensure_data_dir()
 
     def _ensure_data_dir(self):

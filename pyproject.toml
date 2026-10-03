@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai_infrastructure"
+name = "nexus"
 version = "0.1.0"
 description = "NEXUS - Neural Executive Utility System"
 requires-python = ">=3.9"
@@ -15,10 +15,12 @@ dependencies = [
 voice = [
     "piper-tts",
     "sounddevice",
+    "openai-whisper",
+    "scipy",
 ]
 
 [project.scripts]
-nexus = "ai_infrastructure.main:main"
+nexus = "nexus.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

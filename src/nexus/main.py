@@ -3,12 +3,12 @@ NEXUS Core - Main Entry Point
 The orchestrator: boot sequence, logic gate, agentic loop.
 """
 
-from components.boot_manager import BootTracker
-from components import session_memory
-from components import voice
-from components import llm_provider
-
-MODEL = "ministral-3"
+from nexus.components.boot_manager import BootTracker
+from nexus.components import session_memory
+from nexus.components import tts
+from nexus.components import llm_provider
+from nexus.components import vtt
+from nexus.config import get_settings
 
 BASE_PROMPT = """
 You are NEXUS, an advanced AI assistant currently under development.
@@ -22,15 +22,12 @@ Core Identity:
 
 Behavior Rules:
 - Give concise and useful answers.
-- Stay clear and structured.
+- Stay clear.
 - Avoid unnecessary filler.
 - Be practical and solution-oriented.
 - Adapt to the ongoing conversation context.
 - Remember recent conversation history provided to you.
 - If information is missing, ask focused questions.
-- Prioritize accuracy and reasoning.
-- Do not use bold text in answers.
-- Do not answer like a robot.
 
 System State:
 - Running locally through Ollama
@@ -45,6 +42,7 @@ Limitations:
 - Memory only lasts during the current session
 
 You are NEXUS.
+Speak ENGLISH by default
 """
 
 
@@ -61,7 +59,7 @@ Conversation History:
 
 NEXUS:"""
 
-    response = llm_provider.ask(context, model=MODEL).strip()
+    response = llm_provider.ask(context, model=get_settings().model).strip()
 
     session_memory.add_message("NEXUS", response)
 
@@ -71,26 +69,27 @@ NEXUS:"""
 def nexus_loop():
     """Main terminal REPL."""
     print("--- NEXUS v0.1 Operational ---")
-    print("Type 'exit' or 'quit' to shut down.\n")
+    print("Type or say 'exit' or 'quit' to shut down.\n")
 
     session_memory.load()
 
     while True:
         try:
-            user_input = input("You: ").strip()
+            user_input = vtt.listen()
+            print(user_input)
 
             if not user_input:
                 continue
 
-            if user_input.lower() in ["exit", "quit"]:
+            if user_input.lower() in ["exit.", "quit."]:
                 print("NEXUS: Shutting down.")
                 session_memory.save()
                 break
 
             message = nexus_run(user_input)
             print(f"NEXUS: {message}")
-            clean = voice.clean_for_tts(message)
-            voice.speak(clean)
+            clean = tts.clean_for_tts(message)
+            tts.speak(clean)
 
         except (KeyboardInterrupt, EOFError):
             print("\nNEXUS: Shutting down.")
@@ -102,6 +101,8 @@ def nexus_loop():
 
 def pre_warm() -> bool:
     """Verify Ollama is installed and the model is ready before looping."""
+    model = get_settings().model
+
     if not llm_provider.is_ollama_installed():
         print("NEXUS Core: Ollama is not installed. Cannot continue.")
         return False
@@ -110,14 +111,14 @@ def pre_warm() -> bool:
         models = llm_provider.list_models()
         print(models)
 
-        if MODEL not in models:
+        if model not in models:
             print("NEXUS Core is missing the neuronal LLM.")
             response = input("Do you want to pull the LLM now? (yes/no): ")
 
             if response.strip().lower() in ("yes", "y"):
-                print(f"Pulling {MODEL}...")
-                if not llm_provider.pull_model(MODEL):
-                    print(f"Failed to pull {MODEL}.")
+                print(f"Pulling {model}...")
+                if not llm_provider.pull_model(model):
+                    print(f"Failed to pull {model}.")
                     return False
             else:
                 print("NEXUS cannot start without the model.")
@@ -126,7 +127,7 @@ def pre_warm() -> bool:
         return True
 
     except Exception as e:
-        print(f"Error pre-warming {MODEL}: {e}")
+        print(f"Error pre-warming {model}: {e}")
         return False
 
 

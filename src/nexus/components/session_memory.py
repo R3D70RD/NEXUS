@@ -4,20 +4,27 @@ Holds short-term conversation history in memory, with optional
 persistence to disk between runs.
 """
 
+from __future__ import annotations
+
 import json
 import os
 from datetime import datetime
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-HISTORY_FILE = os.path.join(DATA_DIR, "session_history.json")
-
-MAX_HISTORY = 10
+from nexus.config import get_settings
 
 _conversation_history = []
 
 
-def _ensure_data_dir():
-    os.makedirs(DATA_DIR, exist_ok=True)
+def _history_file() -> str:
+    return str(get_settings().history_file)
+
+
+def _max_history() -> int:
+    return get_settings().max_history
+
+
+def _ensure_data_dir(path: str):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
 
 def add_message(role: str, content: str):
@@ -28,7 +35,8 @@ def add_message(role: str, content: str):
         "timestamp": datetime.now().isoformat()
     })
 
-    if len(_conversation_history) > MAX_HISTORY:
+    limit = _max_history()
+    while len(_conversation_history) > limit:
         _conversation_history.pop(0)
 
 
@@ -52,24 +60,26 @@ def clear():
     _conversation_history.clear()
 
 
-def save():
+def save(path: str | None = None):
     """Persist the current session history to disk."""
-    _ensure_data_dir()
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+    history_file = path or _history_file()
+    _ensure_data_dir(history_file)
+    with open(history_file, "w", encoding="utf-8") as f:
         json.dump(_conversation_history, f, indent=4)
 
 
-def load():
+def load(path: str | None = None):
     """Load session history from disk, if present."""
     global _conversation_history
 
-    if not os.path.exists(HISTORY_FILE):
+    history_file = path or _history_file()
+    if not os.path.exists(history_file):
         return
 
     try:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+        with open(history_file, "r", encoding="utf-8") as f:
             data = json.load(f)
             if isinstance(data, list):
-                _conversation_history = data[-MAX_HISTORY:]
+                _conversation_history = data[-_max_history():]
     except (json.JSONDecodeError, OSError):
         pass

@@ -18,13 +18,14 @@ Limbs (Clients): Lightweight Python/C++ nodes on Pop!_OS (Desktop), ESP32 (Robot
 Nervous System: Secure private mesh (Tailscale) with MQTT for real-time hardware communication.
 
 ### 📂 Project Structure
-ai_infrastructure/
-├── src/ai_infrastructure/
+NEXUS/
+├── src/nexus/
 │   ├── main.py           # Logic Gate & Agentic Loop
-│   ├── components/       # LLM Providers & Toolsets
-│   └── data/             # JSON State & Memory Management
-├── tests/                # Integration & Hardware simulation
-└── docs/                 # Schematics for Robotics & API
+│   ├── config.py         # Model, voice, and path settings
+│   ├── components/       # LLM, memory, boot, STT, TTS
+│   └── data/             # Runtime JSON, voices, wav captures (gitignored)
+├── tests/                # Unit tests with mocked hardware
+└── docs/                 # Architecture notes
 
 🚀 Key Features (Active & Planned)
 [ ] Agentic Loop: Self-aware status checking via [STATE] and [USER] tags.
@@ -47,18 +48,23 @@ Microcontrollers: Raspberry Pi 5 (System Control), ESP32.
 Developpement: Pop!_OS with Cosmic DE.
 Environnement: Not tested
 
-🔧 Installation & Setup
-Clone the Repo:
+### 🔧 Installation & Setup
 
-Bash
+```bash
 git clone https://github.com/R3D70RD/NEXUS.git
-
-Setup Virtual Environment:
-Bash
+cd NEXUS
 python -m venv venv
 source venv/bin/activate
-pip install -e .
-Configure Ollama: Ensure your selected LLM is pulled and running locally.
+pip install -e ".[voice]"
+```
+
+Configure Ollama: ensure the model in `src/nexus/config.py` (or `data/settings.json`) is pulled and running locally.
+
+```bash
+nexus
+# or
+python -m nexus
+```
 
 ### 📜 Personal Protocol
 NEXUS is a private development. All logic, memory, and personal data logs are strictly local and encrypted. Zero-cloud dependency is a core requirement.

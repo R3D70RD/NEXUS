@@ -30,6 +30,24 @@ def _load_whisper():
         return None
 
 
+def wait_for_wake_word(wake_word: str):
+    """Block until the wake word is heard, then return the transcription.
+
+    Returns the transcribed text (which may still contain the wake word) or
+    None if listening failed.
+    """
+    target = wake_word.lower().strip()
+    if not target:
+        return None
+
+    while True:
+        text = listen()
+        if not text:
+            return None
+        if target in text.lower():
+            return text
+
+
 def listen():
     model = _load_whisper()
     if model is None:

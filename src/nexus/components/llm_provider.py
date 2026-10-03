@@ -107,3 +107,16 @@ def ask_stream(prompt: str, model: str | None = None) -> Iterator[str]:
     finally:
         process.stdout and process.stdout.close()
         process.wait()
+<<<<<<< HEAD
+=======
+````
+
+src/nexus/components/vtt.py
+````python
+<<<<<<< SEARCH
+def listen():
+    model = _load_whisper()
+    if model is None:
+        print("Whisper model is not loaded.")
+        return None
+>>>>>>> 3c93fbc (feat: add streaming LLM output, wake word, silence handling, and CLI styling)

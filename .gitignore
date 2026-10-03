@@ -212,3 +212,4 @@ nexus/lib64
 nexus/pyvenv.cfg
 src/nexus/data/
 src/nexus/data/voices/
+.aider*

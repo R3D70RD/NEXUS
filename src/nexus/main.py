@@ -3,6 +3,9 @@ NEXUS Core - Main Entry Point
 The orchestrator: boot sequence, logic gate, agentic loop.
 """
 
+import re
+import sys
+
 from nexus.components.boot_manager import BootTracker
 from nexus.components import session_memory
 from nexus.components import tts
@@ -10,93 +13,152 @@ from nexus.components import llm_provider
 from nexus.components import vtt
 from nexus.config import get_settings
 
+# --- Minimal ANSI styling (no external deps) ---
+_RESET = "\033[0m"
+_DIM = "\033[2m"
+_BOLD = "\033[1m"
+_CYAN = "\033[36m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_RED = "\033[31m"
+
+
+def _style(text: str, *codes: str) -> str:
+    return "".join(codes) + text + _RESET
+
+
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
 BASE_PROMPT = """
-You are NEXUS, an advanced AI assistant currently under development.
-Neural Executive Utility System.
+You are NEXUS (Neural Executive Utility System), a local voice assistant.
 
-Core Identity:
-- Efficient
-- Direct
-- Technically capable
-- Short natural replies
+Voice and tone:
+- Speak like a calm mission controller: precise, neutral, quietly confident.
+- Never use "Sir", "Master", or honorifics. You are a partner, not a servant.
+- Efficient elegance: complete sentences, no filler, no padding, no restating the question.
+- Default to 1-3 short sentences. Expand only when the user asks for detail.
+- Plain spoken English. No markdown, no bullet lists, no emoji, no code fences
+  unless the user explicitly asks for code.
 
-Behavior Rules:
-- Give concise and useful answers.
-- Stay clear.
-- Avoid unnecessary filler.
-- Be practical and solution-oriented.
-- Adapt to the ongoing conversation context.
-- Remember recent conversation history provided to you.
-- If information is missing, ask focused questions.
+Behavior:
+- Answer directly. If you don't know, say so in one line.
+- If the request is ambiguous, ask one focused question instead of guessing.
+- Match the user's energy: casual when they are casual, transactional when they
+  are in a hurry. Drop any wit if the user sounds stressed or rushed.
+- Never invent facts, tools, or capabilities you do not have.
 
-System State:
-- Running locally through Ollama
-- Terminal-based interface
-- Session memory enabled
-- Long-term memory not fully implemented
-- Tool execution currently disabled
+Constraints:
+- You run locally through Ollama. No internet access.
+- You cannot execute shell commands.
+- Memory is limited to the current session.
 
-Limitations:
-- Cannot access the internet
-- Cannot execute terminal commands
-- Memory only lasts during the current session
-
-You are NEXUS.
-Speak ENGLISH by default
+You are NEXUS. Reply in English by default.
 """
 
 
-def nexus_run(user_input: str) -> str:
-    """Process one user turn: update memory, query LLM, store response."""
-    session_memory.add_message("user", user_input)
-
+def _build_context() -> str:
     memory_context = session_memory.get_context()
-
-    context = f"""{BASE_PROMPT}
+    return f"""{BASE_PROMPT}
 
 Conversation History:
 {memory_context}
 
 NEXUS:"""
 
-    response = llm_provider.ask(context, model=get_settings().model).strip()
 
+def nexus_run(user_input: str) -> str:
+    """Process one user turn: stream the LLM response, speak it sentence by sentence."""
+    session_memory.add_message("user", user_input)
+
+    context = _build_context()
+
+    print(_style("NEXUS: ", _BOLD, _CYAN), end="", flush=True)
+
+    buffer = ""
+    full_response_parts: list[str] = []
+
+    for line in llm_provider.ask_stream(context, model=get_settings().model):
+        if not line:
+            continue
+
+        print(line, flush=True)
+        full_response_parts.append(line)
+        buffer += line + " "
+
+        # Flush complete sentences to TTS as soon as they are ready.
+        while True:
+            match = _SENTENCE_END.search(buffer)
+            if not match:
+                break
+            sentence = buffer[: match.start()].strip()
+            buffer = buffer[match.end():]
+            if sentence:
+                tts.speak(sentence)
+
+    # Flush any trailing fragment.
+    tail = buffer.strip()
+    if tail:
+        tts.speak(tail)
+
+    print()
+
+    response = " ".join(full_response_parts).strip()
     session_memory.add_message("NEXUS", response)
-
     return response
 
 
 def nexus_loop():
-    """Main terminal REPL."""
-    print("--- NEXUS v0.1 Operational ---")
-    print("Type or say 'exit' or 'quit' to shut down.\n")
+    """Main terminal REPL with wake-word gating and silence handling."""
+    settings = get_settings()
+    wake_word = settings.wake_word
+    silence_words = settings.silence_word_list
+
+    print(_style("--- NEXUS v0.1 Operational ---", _BOLD, _CYAN))
+    print(_style(f"Say '{wake_word}' to activate. Say 'exit' or 'quit' to shut down.", _DIM))
+    print()
 
     session_memory.load()
 
     while True:
         try:
-            user_input = vtt.listen()
-            print(user_input)
+            print(_style(f"[idle] waiting for wake word '{wake_word}'...", _DIM))
+            wake_text = vtt.wait_for_wake_word(wake_word)
 
-            if not user_input:
+            if not wake_text:
                 continue
 
-            if user_input.lower() in ["exit.", "quit."]:
-                print("NEXUS: Shutting down.")
+            print(_style(f"You: {wake_text}", _GREEN))
+
+            # Strip the wake word from the first utterance if it is the only content.
+            stripped = wake_text.lower().replace(wake_word.lower(), "").strip(" ,.!?")
+            user_input = stripped if stripped else None
+
+            if user_input is None:
+                # Wake word alone: listen for the actual request.
+                user_input = vtt.listen()
+                if not user_input:
+                    continue
+                print(_style(f"You: {user_input}", _GREEN))
+
+            lowered = user_input.lower().strip(" .!?")
+
+            if lowered in ("exit", "quit"):
+                print(_style("NEXUS: Shutting down.", _CYAN))
                 session_memory.save()
                 break
 
-            message = nexus_run(user_input)
-            print(f"NEXUS: {message}")
-            clean = tts.clean_for_tts(message)
-            tts.speak(clean)
+            if lowered in silence_words:
+                print(_style("NEXUS: Standing by.", _CYAN))
+                continue
+
+            nexus_run(user_input)
 
         except (KeyboardInterrupt, EOFError):
-            print("\nNEXUS: Shutting down.")
+            print(_style("\nNEXUS: Shutting down.", _CYAN))
             session_memory.save()
             break
         except Exception as e:
-            print(f"NEXUS: Internal error - {e}")
+            print(_style(f"NEXUS: Internal error - {e}", _RED))
 
 
 def pre_warm() -> bool:
@@ -109,7 +171,6 @@ def pre_warm() -> bool:
 
     try:
         models = llm_provider.list_models()
-        print(models)
 
         if model not in models:
             print("NEXUS Core is missing the neuronal LLM.")
@@ -157,8 +218,8 @@ def main():
             print("Setup incomplete. Exiting.")
             return
 
-    print("Welcome back, please wait...")
-    print("NEXUS Booting...")
+    print(_style("Welcome back, please wait...", _DIM))
+    print(_style("NEXUS Booting...", _BOLD, _CYAN))
 
     if pre_warm():
         nexus_loop()

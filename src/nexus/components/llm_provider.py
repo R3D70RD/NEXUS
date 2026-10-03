@@ -6,6 +6,7 @@ Wraps calls to a local Ollama model.
 from __future__ import annotations
 
 import subprocess
+from typing import Iterator
 
 from nexus.config import get_settings
 
@@ -79,3 +80,40 @@ def ask(prompt: str, model: str | None = None) -> str:
         return f"Error calling Ollama: {stderr}"
     except FileNotFoundError:
         return "Error: Ollama is not installed or not on PATH."
+
+
+def ask_stream(prompt: str, model: str | None = None) -> Iterator[str]:
+    """Stream the model's response line by line as it is generated.
+
+    Yields each line of stdout as soon as Ollama flushes it. The caller is
+    responsible for buffering lines into sentences if needed.
+    """
+    try:
+        process = subprocess.Popen(
+            ["ollama", "run", _model_name(model), prompt],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+    except FileNotFoundError:
+        yield "Error: Ollama is not installed or not on PATH."
+        return
+
+    try:
+        assert process.stdout is not None
+        for line in process.stdout:
+            yield line.rstrip("\n")
+    finally:
+        process.stdout and process.stdout.close()
+        process.wait()
+````
+
+src/nexus/components/vtt.py
+````python
+<<<<<<< SEARCH
+def listen():
+    model = _load_whisper()
+    if model is None:
+        print("Whisper model is not loaded.")
+        return None

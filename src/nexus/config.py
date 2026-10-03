@@ -26,6 +26,9 @@ class Settings:
     max_history: int = 10
     voice_filename: str = "en_US-ljspeech-high.onnx"
     llm_timeout_seconds: int = 120
+    wake_word: str = "nexus"
+    silence_words: str = "silence,stop,quiet,shut up"
+    tts_chunk_mode: str = "sentence"
     data_dir: Path = DATA_DIR
 
     @property
@@ -47,6 +50,10 @@ class Settings:
     @property
     def live_input_wav(self) -> Path:
         return self.data_dir / "input" / "live_input.wav"
+
+    @property
+    def silence_word_list(self) -> list[str]:
+        return [w.strip().lower() for w in self.silence_words.split(",") if w.strip()]
 
 
 _settings = Settings()

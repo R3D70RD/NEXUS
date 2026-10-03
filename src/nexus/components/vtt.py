@@ -1,19 +1,16 @@
+"""
+Voice Input
+Speech-to-text using Whisper. Returns None if the model or
+audio backend cannot be initialized.
+"""
+
 import os
 
-# Initialize global state tracking variables
+from nexus.config import get_settings
+
 _model = None
 _whisper_load_failed = False
 
-SAMPLE_RATE = 16000
-DURATION = 5
-
-# Fixed missing comma
-WHISPER_MODEL_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "data",
-    "input",               # Added comma here
-    "live_input.wav"
-)
 
 def _load_whisper():
     global _model, _whisper_load_failed
@@ -22,20 +19,16 @@ def _load_whisper():
         return _model
 
     try:
-        # We import these globally here so they are accessible in listen()
-        global np, sd, whisper, write
-        import numpy as np
-        import sounddevice as sd 
         import whisper
-        from scipy.io.wavfile import write 
 
-        print("🤖 Loading Whisper 'small' model...")
-        _model = whisper.load_model("small")
+        print("Loading Whisper model...")
+        _model = whisper.load_model(get_settings().whisper_model)
         return _model
     except Exception as e:
         print(f"Failed to initialize Whisper dependencies: {e}")
         _whisper_load_failed = True
         return None
+
 
 def listen():
     model = _load_whisper()
@@ -44,27 +37,32 @@ def listen():
         return None
 
     try:
+        import sounddevice as sd
+        from scipy.io.wavfile import write
+
+        settings = get_settings()
+        sample_rate = settings.sample_rate
+        duration = settings.listen_duration_seconds
+        live_input_wav = str(settings.live_input_wav)
+
         print("\n NEXUS: Listening... ")
-        # Record audio as float32, mono channel
         audio_data = sd.rec(
-            int(DURATION * SAMPLE_RATE), 
-            samplerate=SAMPLE_RATE, 
-            channels=1, 
+            int(duration * sample_rate),
+            samplerate=sample_rate,
+            channels=1,
             dtype="float32"
         )
-        sd.wait()  # Wait until the recording is finished
-        print("Recording finished. Transcribing...") # how to make the system wait only when user stopped talking for a few seconds?
+        sd.wait()
+        print("Recording finished. Transcribing...")
 
-        # Ensure the target directory exists before saving
-        os.makedirs(os.path.dirname(WHISPER_MODEL_PATH), exist_ok=True)
+        os.makedirs(os.path.dirname(live_input_wav), exist_ok=True)
 
-        # Used WHISPER_MODEL_PATH instead of undefined FILENAME
-        write(WHISPER_MODEL_PATH, SAMPLE_RATE, audio_data)
-        result = model.transcribe(WHISPER_MODEL_PATH, fp16=False)
+        write(live_input_wav, sample_rate, audio_data)
+        result = model.transcribe(live_input_wav, fp16=False)
 
         print("\n--- Transcription ---")
         return result["text"].strip()
-        
+
     except Exception as e:
         print(f"Error while trying to listen: {e}")
         return None

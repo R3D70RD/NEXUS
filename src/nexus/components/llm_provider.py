@@ -3,10 +3,19 @@ LLM Provider
 Wraps calls to a local Ollama model.
 """
 
+from __future__ import annotations
+
 import subprocess
 
-DEFAULT_MODEL = "ministral-3"
-TIMEOUT_SECONDS = 120
+from nexus.config import get_settings
+
+
+def _model_name(model: str | None = None) -> str:
+    return model or get_settings().model
+
+
+def _timeout_seconds() -> int:
+    return get_settings().llm_timeout_seconds
 
 
 def is_ollama_installed() -> bool:
@@ -35,37 +44,38 @@ def list_models() -> str:
     return result.stdout.strip()
 
 
-def is_model_available(model: str) -> bool:
+def is_model_available(model: str | None = None) -> bool:
     """Check whether `model` is present in `ollama list` output."""
     try:
-        return model in list_models()
+        return _model_name(model) in list_models()
     except subprocess.CalledProcessError:
         return False
 
 
-def pull_model(model: str) -> bool:
+def pull_model(model: str | None = None) -> bool:
     """Pull `model` via ollama. Returns True on success."""
     try:
-        subprocess.run(["ollama", "pull", model], check=True)
+        subprocess.run(["ollama", "pull", _model_name(model)], check=True)
         return True
     except subprocess.CalledProcessError:
         return False
 
 
-def ask(prompt: str, model: str = DEFAULT_MODEL) -> str:
+def ask(prompt: str, model: str | None = None) -> str:
     """Send `prompt` to the local model and return the response text."""
     try:
         result = subprocess.run(
-            ["ollama", "run", model, prompt],
+            ["ollama", "run", _model_name(model), prompt],
             capture_output=True,
             text=True,
-            timeout=TIMEOUT_SECONDS,
+            timeout=_timeout_seconds(),
             check=True
         )
         return result.stdout.strip()
     except subprocess.TimeoutExpired:
         return "Error: LLM request timed out."
     except subprocess.CalledProcessError as e:
-        return f"Error calling Ollama: {e.stderr.strip()}"
+        stderr = (e.stderr or "").strip()
+        return f"Error calling Ollama: {stderr}"
     except FileNotFoundError:
         return "Error: Ollama is not installed or not on PATH."

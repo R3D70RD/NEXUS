@@ -3,13 +3,12 @@ NEXUS Core - Main Entry Point
 The orchestrator: boot sequence, logic gate, agentic loop.
 """
 
-from components.boot_manager import BootTracker
-from components import session_memory
-from components import tts
-from components import llm_provider
-from components import vtt
-
-MODEL = "ministral-3"
+from nexus.components.boot_manager import BootTracker
+from nexus.components import session_memory
+from nexus.components import tts
+from nexus.components import llm_provider
+from nexus.components import vtt
+from nexus.config import get_settings
 
 BASE_PROMPT = """
 You are NEXUS, an advanced AI assistant currently under development.
@@ -60,7 +59,7 @@ Conversation History:
 
 NEXUS:"""
 
-    response = llm_provider.ask(context, model=MODEL).strip()
+    response = llm_provider.ask(context, model=get_settings().model).strip()
 
     session_memory.add_message("NEXUS", response)
 
@@ -76,7 +75,6 @@ def nexus_loop():
 
     while True:
         try:
-            # user_input = input("You: ").strip()
             user_input = vtt.listen()
             print(user_input)
 
@@ -103,6 +101,8 @@ def nexus_loop():
 
 def pre_warm() -> bool:
     """Verify Ollama is installed and the model is ready before looping."""
+    model = get_settings().model
+
     if not llm_provider.is_ollama_installed():
         print("NEXUS Core: Ollama is not installed. Cannot continue.")
         return False
@@ -111,14 +111,14 @@ def pre_warm() -> bool:
         models = llm_provider.list_models()
         print(models)
 
-        if MODEL not in models:
+        if model not in models:
             print("NEXUS Core is missing the neuronal LLM.")
             response = input("Do you want to pull the LLM now? (yes/no): ")
 
             if response.strip().lower() in ("yes", "y"):
-                print(f"Pulling {MODEL}...")
-                if not llm_provider.pull_model(MODEL):
-                    print(f"Failed to pull {MODEL}.")
+                print(f"Pulling {model}...")
+                if not llm_provider.pull_model(model):
+                    print(f"Failed to pull {model}.")
                     return False
             else:
                 print("NEXUS cannot start without the model.")
@@ -127,7 +127,7 @@ def pre_warm() -> bool:
         return True
 
     except Exception as e:
-        print(f"Error pre-warming {MODEL}: {e}")
+        print(f"Error pre-warming {model}: {e}")
         return False
 
 

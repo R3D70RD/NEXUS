@@ -4,7 +4,10 @@ import os
 import tempfile
 import unittest
 
-from src.nexus.components import boot_manager
+import pathsetup  # noqa: F401
+
+from nexus.components.boot_manager import BootTracker
+
 
 class TestBootTracker(unittest.TestCase):
 

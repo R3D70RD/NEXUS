@@ -28,10 +28,10 @@ class Settings:
     whisper_model: str = "small"
     listen_duration_seconds: int = 15
     silence_duration_seconds: float = 1.5
-    silence_rms_threshold: float = 0.01
+    silence_rms_threshold: float = 0.2
     sample_rate: int = 16000
     max_history: int = 10
-    voice_filename: str = "en_US-ljspeech-high.onnx"
+    voice_filename: str = "fr_FR-upmc-medium.onnx"
     llm_timeout_seconds: int = 120
     wake_word: str = "nexus"
     silence_words: str = "silence,stop,quiet,shut up"

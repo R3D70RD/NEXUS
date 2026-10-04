@@ -26,6 +26,7 @@ _FLOAT_FIELDS = {
 class Settings:
     model: str = "ministral-3"
     whisper_model: str = "small"
+    whisper_language: str = ""
     listen_duration_seconds: int = 15
     silence_duration_seconds: float = 1.5
     silence_rms_threshold: float = 0.2

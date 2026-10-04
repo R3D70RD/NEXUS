@@ -37,7 +37,7 @@ Voice and tone:
 - Never use "Sir", "Master", or honorifics. You are a partner, not a servant.
 - Efficient elegance: complete sentences, no filler, no padding, no restating the question.
 - Default to 1-3 short sentences. Expand only when the user asks for detail.
-- Plain spoken English. No markdown, no bullet lists, no emoji, no code fences
+- Plain spoken. No markdown, no bullet lists, no emoji, no code fences
   unless the user explicitly asks for code.
 
 Behavior:
@@ -52,7 +52,7 @@ Constraints:
 - You cannot execute shell commands.
 - Memory is limited to the current session.
 
-You are NEXUS. Reply in English by default.
+You are NEXUS. Reply in the user's input langage.
 """
 
 
@@ -108,57 +108,182 @@ def nexus_run(user_input: str) -> str:
 
 
 def nexus_loop():
-    """Main terminal REPL with wake-word gating and silence handling."""
-    settings = get_settings()
-    wake_word = settings.wake_word
-    silence_words = settings.silence_word_list
+    """
+    Main NEXUS conversation state machine.
 
-    print(_style("--- NEXUS v0.1 Operational ---", _BOLD, _CYAN))
-    print(_style(f"Say '{wake_word}' to activate. Say 'exit' or 'quit' to shut down.", _DIM))
+    IDLE:
+        Wait exclusively for the wake word.
+
+    ACTIVE:
+        Listen -> transcribe -> process -> speak.
+        Continue listening while the user keeps talking.
+
+    If the user says a silence word or gives no response,
+    return to IDLE.
+    """
+    settings = get_settings()
+
+    wake_word = settings.wake_word.lower().strip()
+    silence_words = {
+        word.lower().strip()
+        for word in settings.silence_word_list
+    }
+
+    print(
+        _style(
+            "--- NEXUS v0.1 Operational ---",
+            _BOLD,
+            _CYAN,
+        )
+    )
+
+    print(
+        _style(
+            f"Say '{wake_word}' to activate. "
+            "Say 'exit' or 'quit' to shut down.",
+            _DIM,
+        )
+    )
+
     print()
 
     session_memory.load()
 
     while True:
         try:
-            print(_style(f"[idle] waiting for wake word '{wake_word}'...", _DIM))
+            # IDLE MODE
             wake_text = vtt.wait_for_wake_word(wake_word)
 
             if not wake_text:
                 continue
 
-            print(_style(f"You: {wake_text}", _GREEN))
+            print(
+                _style(
+                    f"You: {wake_text}",
+                    _GREEN,
+                )
+            )
 
-            # Strip the wake word from the first utterance if it is the only content.
-            stripped = wake_text.lower().replace(wake_word.lower(), "").strip(" ,.!?")
-            user_input = stripped if stripped else None
+            # Remove wake word from what Whisper heard.
+            stripped = (
+                wake_text
+                .lower()
+                .replace(wake_word, "", 1)
+                .strip(" ,.!?")
+            )
 
-            if user_input is None:
-                # Wake word alone: listen for the actual request.
+            # WAKE WORD + REQUEST IN SAME SENTENCE
+            #
+            # Example:
+            # "Nexus what's the weather?"
+            #
+            # -> immediately process:
+            # "what's the weather?"
+
+            if stripped:
+                user_input = stripped
+
+            else:
+                # WAKE WORD ALONE
+                # Example:
+                # "Nexus"
+                # Now actually listen for the user's request.
+
+                print(
+                    _style(
+                        "NEXUS: Listening for your request...",
+                        _CYAN,
+                    )
+                )
+
                 user_input = vtt.listen()
-                if not user_input:
-                    continue
-                print(_style(f"You: {user_input}", _GREEN))
 
-            lowered = user_input.lower().strip(" .!?")
-
-            if lowered in ("exit", "quit"):
-                print(_style("NEXUS: Shutting down.", _CYAN))
-                session_memory.save()
-                break
-
-            if lowered in silence_words:
-                print(_style("NEXUS: Standing by.", _CYAN))
+            # Nothing was said after activation.
+            if not user_input:
+                print(
+                    _style(
+                        "NEXUS: Standing by.",
+                        _CYAN,
+                    )
+                )
                 continue
 
-            nexus_run(user_input)
+            # ACTIVE CONVERSATION MODE
+
+            while True:
+                lowered = user_input.lower().strip(" .!?")
+
+                # EXIT
+
+                if lowered in {"exit", "quit"}:
+                    print(
+                        _style(
+                            "NEXUS: Shutting down.",
+                            _CYAN,
+                        )
+                    )
+
+                    session_memory.save()
+                    return
+
+                # SILENCE / END CONVERSATION
+
+                if lowered in silence_words:
+                    print(
+                        _style(
+                            "NEXUS: Standing by.",
+                            _CYAN,
+                        )
+                    )
+
+                    break
+
+                # SEND USER INPUT TO LLM
+
+                nexus_run(user_input)
+
+                # LISTEN FOR NEXT TURN
+
+                user_input = vtt.listen()
+
+                # USER STOPPED TALKING :
+                # Return to idle and wait for "nexus".
+
+                if not user_input:
+                    print(
+                        _style(
+                            "NEXUS: Standing by.",
+                            _CYAN,
+                        )
+                    )
+
+                    break
+
+                print(
+                    _style(
+                        f"You: {user_input}",
+                        _GREEN,
+                    )
+                )
 
         except (KeyboardInterrupt, EOFError):
-            print(_style("\nNEXUS: Shutting down.", _CYAN))
+            print(
+                _style(
+                    "\nNEXUS: Shutting down.",
+                    _CYAN,
+                )
+            )
+
             session_memory.save()
             break
+
         except Exception as e:
-            print(_style(f"NEXUS: Internal error - {e}", _RED))
+            print(
+                _style(
+                    f"NEXUS: Internal error - {e}",
+                    _RED,
+                )
+            )
 
 
 def pre_warm() -> bool:

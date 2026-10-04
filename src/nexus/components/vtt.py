@@ -101,7 +101,7 @@ def wait_for_wake_word(wake_word: str):
             result = model.transcribe(
                 audio.flatten(),
                 fp16=False,
-                language="en",
+                language=settings.whisper_language or None,
             )
 
             text = result["text"].strip()
@@ -234,7 +234,7 @@ def listen():
         result = model.transcribe(
             live_input_wav,
             fp16=False,
-            language="en",
+            language=settings.whisper_language or None,
         )
 
         text = result["text"].strip()
